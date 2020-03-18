@@ -12,7 +12,7 @@ aws_prefix_edl.py.zip
 
 Load the Cloud Formation Template
 
-###Input Parameters
+##Input Parameters
 
 EDLBucket - The Name of the S3 Bucket that will host the dynamic list
 
