@@ -15,7 +15,10 @@ Load the Cloud Formation Template
 ###Input Parameters
 
 EDLBucket - The Name of the S3 Bucket that will host the dynamic list
+
 PrefixListURL - Location of the Json file published by AWS Default: https://ip-ranges.amazonaws.com/ip-ranges.json
+
 EdlPrefixListFileName - Name of the file published to S3 and read by the firewall Default: aws-prefix-edl.txt
+
 LambdaFunctionsBucketName - The name of the S3 bucket that contains the 'layer.zip' 'aws_prefix_edl.py.zip' files
 
