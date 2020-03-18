@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates an Transit Gateway with a Security VPC and two spoke VPCs VPC0
+  and VPC1
+Parameters:
+  EDLBucket:
+    Type: String
+    Description: Enter the name S3 Bucket Name containing the Bootstrap files
+  PrefixListURL:
+    Type: String
+    Description: URL for AWS prefix list
+    Default: https://ip-ranges.amazonaws.com/ip-ranges.json
+  EdlPrefixListFileName:
+    Type: String
+    Description: File name for the EDL in S3
+    Default: aws-prefix-edl.txt
+  LambdaFunctionsBucketName:
+    Description: Existing S3 bucket name which contains the Lambda funtions zip file
+    Type: String
+
+
+  LambdaRate:
+    Description: "The rate (frequency) that determines when CloudWatch Events runs\
+      \ the rule that triggers the Route Monitor Lambda function.\n"
+    Default: rate(1 minute)
+    AllowedValues:
+      - rate(1 minute)
+      - rate(10 minutes)
+      - rate(60 minutes)
+    Type: String
+
+Resources:
+  ASLambdalayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - python3.6
+        - python3.7
+      Content:
+        S3Bucket: !Ref 'LambdaFunctionsBucketName'
+        S3Key: layer.zip
+      Description: Requests module Layer
+      LayerName: requests-layer
+      LicenseInfo: MIT
+  LambdaSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Sub '${LambdaAWSPrefixToEDL.Arn}'
+      Principal: events.amazonaws.com
+      SourceArn: !Sub '${LambdaSchedule.Arn}'
+    DependsOn:
+      - LambdaSchedule
+  LambdaSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "A schedule for the Route Monitor Lambda function..\n"
+      ScheduleExpression: !Ref 'LambdaRate'
+      State: ENABLED
+      Targets:
+        - Arn: !Sub '${LambdaAWSPrefixToEDL.Arn}'
+          Id: LambdaSchedule
+    DependsOn:
+      - LambdaAWSPrefixToEDL
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join
+        - '-'
+        - - TransitLambdaExecutionRole
+          - !Ref 'AWS::StackName'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+  LambdaExecutionPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Join
+        - '-'
+        - - TransitLambdaExecutionPolicy
+          - !Ref 'AWS::StackName'
+      Roles:
+        - !Ref 'LambdaExecutionRole'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: STSAccumRole
+            Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Resource:
+              - '*'
+          - Sid: InvokeLambda
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+              - lambda:ListLayerVersions
+              - lambda:ListLayers
+              - lambda:DeleteFunction
+              - lambda:CreateFunction
+            Resource:
+              - '*'
+          - Action:
+              - iam:UpdateAssumeRolePolicy
+              - iam:GetRole
+              - iam:PassRole
+            Resource:
+              - '*'
+            Effect: Allow
+            Sid: IAMActions
+          - Action:
+              - cloudformation:*
+            Resource:
+              - '*'
+            Effect: Allow
+            Sid: CloudFormationActions
+
+          - Sid: Logs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - '*'
+          - Sid: S3Actions
+            Effect: Allow
+            Action:
+              - s3:GetBucketAcl
+              - s3:GetBucketLocation
+              - s3:GetObject
+              - s3:GetObjectAcl
+              - s3:ListBucket
+              - s3:PutObject
+              - s3:PutObjectAcl
+              - s3:PutObjectTagging
+              - s3:DeleteBucket
+              - s3:DeleteBucketPolicy
+              - s3:DeleteObject
+            Resource:
+              - '*'
+
+  LambdaAWSPrefixToEDL:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Sets the Untrust NIC IP object and sets trust interface static
+        route NH
+      Handler: aws_prefix_edl.lambda_handler
+      Role: !GetAtt 'LambdaExecutionRole.Arn'
+      Layers:
+        - !Ref 'ASLambdalayer'
+      Code:
+        S3Bucket: !Ref 'LambdaFunctionsBucketName'
+        S3Key: aws_prefix_edl.py.zip
+      Environment:
+        Variables:
+          Region: !Ref 'AWS::Region'
+          aws_list_url: !Ref 'PrefixListURL'
+          s3_bucket: !Ref 'EDLBucket'
+          s3_path: !Ref 'EdlPrefixListFileName'
+      Runtime: python3.6
+      Timeout: 150
+
+
+
+
