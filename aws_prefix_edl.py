@@ -62,6 +62,8 @@ def lambda_handler(event, context):
 
     for item in res['prefixes']:
         aws_prefix_list = aws_prefix_list + item['ip_prefix'] + '\n'
+    for item in res['ipv6_prefixes']:
+        aws_prefix_list = aws_prefix_list + item['ipv6_prefix'] + '\n'
 
     try:
         obj = s3.Object(s3Bucket, s3_path)
